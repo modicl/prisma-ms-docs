@@ -1,6 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
+import { CognitoAuthGuard } from "../auth/guards/cognito-auth.guard";
 import { JobsController } from "./jobs.controller";
 import { JobsService } from "./jobs.service";
 
@@ -31,7 +31,7 @@ describe("JobsController", () => {
         { provide: JobsService, useValue: jobsServiceMock },
       ],
     })
-      .overrideGuard(SupabaseAuthGuard)
+      .overrideGuard(CognitoAuthGuard)
       .useValue({ canActivate: jest.fn(() => true) })
       .compile();
 

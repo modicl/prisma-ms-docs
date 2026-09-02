@@ -1,9 +1,9 @@
 import { Module } from "@nestjs/common";
 import { RolesGuard } from "./guards/roles.guard";
-import { SupabaseAuthGuard } from "./guards/supabase-auth.guard";
+import { CognitoAuthGuard } from "./guards/cognito-auth.guard";
 
 @Module({
-  providers: [SupabaseAuthGuard, RolesGuard],
-  exports: [SupabaseAuthGuard, RolesGuard],
+  providers: [CognitoAuthGuard, RolesGuard],
+  exports: [CognitoAuthGuard, RolesGuard],
 })
 export class AuthModule {}

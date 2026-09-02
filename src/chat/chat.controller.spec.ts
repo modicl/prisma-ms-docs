@@ -2,7 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ChatController } from "./chat.controller";
 import { ChatService } from "./chat.service";
-import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
+import { CognitoAuthGuard } from "../auth/guards/cognito-auth.guard";
 
 jest.mock("jose", () => ({
   createRemoteJWKSet: jest.fn(() => "jwks"),
@@ -23,7 +23,7 @@ describe("ChatController", () => {
       controllers: [ChatController],
       providers: [{ provide: ChatService, useValue: chatServiceMock }],
     })
-      .overrideGuard(SupabaseAuthGuard)
+      .overrideGuard(CognitoAuthGuard)
       .useValue({ canActivate: jest.fn(() => true) })
       .compile();
 

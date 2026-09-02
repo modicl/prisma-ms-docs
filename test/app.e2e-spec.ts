@@ -6,7 +6,7 @@ import { ChatController } from "../src/chat/chat.controller";
 import { ChatService } from "../src/chat/chat.service";
 import { JobsController } from "../src/jobs/jobs.controller";
 import { JobsService } from "../src/jobs/jobs.service";
-import { SupabaseAuthGuard } from "../src/auth/guards/supabase-auth.guard";
+import { CognitoAuthGuard } from "../src/auth/guards/cognito-auth.guard";
 import { RolesGuard } from "../src/auth/guards/roles.guard";
 
 jest.mock("jose", () => ({
@@ -14,7 +14,7 @@ jest.mock("jose", () => ({
   jwtVerify: jest.fn(),
 }));
 
-class TestSupabaseAuthGuard implements CanActivate {
+class TestCognitoAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<{ user?: { id: string } }>();
     request.user = { id: "teacher-1" };
@@ -44,8 +44,8 @@ describe("App e2e", () => {
         { provide: JobsService, useValue: jobsServiceMock },
       ],
     })
-      .overrideGuard(SupabaseAuthGuard)
-      .useClass(TestSupabaseAuthGuard)
+      .overrideGuard(CognitoAuthGuard)
+      .useClass(TestCognitoAuthGuard)
       // El endpoint de listado usa también RolesGuard; en e2e lo dejamos pasar
       // (el control de roles se prueba de forma unitaria en roles.guard.spec).
       .overrideGuard(RolesGuard)

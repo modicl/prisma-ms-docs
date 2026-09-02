@@ -23,7 +23,7 @@ import { FileFieldsInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
 import { StartChatDto } from "./dto/start-chat.dto";
 import { ChatService } from "./chat.service";
-import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
+import { CognitoAuthGuard } from "../auth/guards/cognito-auth.guard";
 
 type UploadedFile = {
   originalname: string;
@@ -35,7 +35,7 @@ type RequestWithUser = Request & { user?: { id?: string; colegioId?: string | nu
 
 @ApiTags("chat")
 @Controller("chat")
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(CognitoAuthGuard)
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 

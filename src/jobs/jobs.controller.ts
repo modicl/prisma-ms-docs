@@ -25,7 +25,7 @@ import { FileFieldsInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { RolesGuard } from "../auth/guards/roles.guard";
-import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
+import { CognitoAuthGuard } from "../auth/guards/cognito-auth.guard";
 import { ListJobsQueryDto } from "./dto/list-jobs-query.dto";
 import { UploadJobDto } from "./dto/upload-job.dto";
 import { JobsService } from "./jobs.service";
@@ -47,7 +47,7 @@ type RequestWithUser = Request & {
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(CognitoAuthGuard)
   @Post("upload")
   @ApiBearerAuth()
   @ApiConsumes("multipart/form-data")
@@ -96,7 +96,7 @@ export class JobsController {
     return this.jobsService.createUploadJob(user.id, dto, files, user.colegioId);
   }
 
-  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @UseGuards(CognitoAuthGuard, RolesGuard)
   @Roles(...ADMIN_ROLES)
   @Get()
   @ApiBearerAuth()
@@ -113,7 +113,7 @@ export class JobsController {
     return this.jobsService.findJobsByUser(user.id, query);
   }
 
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(CognitoAuthGuard)
   @Get("history")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Historial de sesiones del docente (desde DynamoDB)" })
@@ -124,7 +124,7 @@ export class JobsController {
     return this.jobsService.getHistoryByUser(user.id);
   }
 
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(CognitoAuthGuard)
   @Get(":id")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Estado actual de un job" })
@@ -142,7 +142,7 @@ export class JobsController {
     return this.jobsService.findJobStatus(user.id, id);
   }
 
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(CognitoAuthGuard)
   @Get(":id/download")
   @ApiBearerAuth()
   @ApiOperation({ summary: "URL firmada para descargar el documento generado" })
@@ -160,7 +160,7 @@ export class JobsController {
     return this.jobsService.getDownloadUrl(user.id, id);
   }
 
-  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @UseGuards(CognitoAuthGuard, RolesGuard)
   @Roles(...ADMIN_ROLES)
   @Get("colegio/:colegioId/stats")
   @ApiBearerAuth()
@@ -183,7 +183,7 @@ export class JobsController {
     return this.jobsService.getStatsByColegio(colegioId);
   }
 
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(CognitoAuthGuard)
   @Get("colegio/:colegioId/jobs")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Jobs de un colegio específico" })

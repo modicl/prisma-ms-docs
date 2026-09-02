@@ -10,12 +10,14 @@ describe("S3Service configuration", () => {
     jest.clearAllMocks();
   });
 
-  it("throws when AWS credentials are missing", () => {
+  // Solo AWS_REGION es obligatoria: sin access keys explicitas el SDK cae a su
+  // cadena de credenciales por defecto, que en ECS resuelve el task role.
+  it("throws when AWS_REGION is missing", () => {
     configServiceMock.get.mockReturnValue(undefined);
     const service = new S3Service(configServiceMock as unknown as ConfigService);
 
     expect(() => (service as any).getClientAndBucket()).toThrow(
-      "AWS environment variables are required for S3 operations.",
+      "AWS_REGION is required for S3 operations.",
     );
   });
 
