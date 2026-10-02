@@ -143,6 +143,35 @@ export class DynamoService {
     }
   }
 
+  /**
+   * Flujo activo del docente, para que pueda retomarlo si cerró el navegador o perdió la conexión.
+   * SOLO lectura (dos GetItem): lee su cupo `user#{id}` y la sesión a la que apunta. Un cupo vencido o una sesión ya
+   * terminada no cuentan como activos (no se limpian desde aquí).
+   */
+  async getActiveSession(
+    userId: string,
+  ): Promise<{ sessionId: string; phase: string; workflowStatus: string | null } | null> {
+    const table = this.table();
+    const cupo = await this.getClient().send(
+      new GetItemCommand({ TableName: table, Key: { session_id: { S: `user#${userId}` } } }),
+    );
+    const sessionId = cupo.Item?.active_session?.S;
+    const hasta = Number(cupo.Item?.active_until?.N ?? 0);
+    if (!sessionId || hasta < Math.floor(Date.now() / 1000)) return null;
+
+    const sesion = await this.getClient().send(
+      new GetItemCommand({
+        TableName: table,
+        Key: { session_id: { S: sessionId } },
+        ProjectionExpression: "#ph, workflow_status",
+        ExpressionAttributeNames: { "#ph": "phase" },
+      }),
+    );
+    const phase = sesion.Item?.phase?.S;
+    if (!phase || phase === "completed" || phase === "error") return null;
+    return { sessionId, phase, workflowStatus: sesion.Item?.workflow_status?.S || null };
+  }
+
   private table(): string {
     const table =
       this.configService.get<string>("DYNAMO_TABLE") ??

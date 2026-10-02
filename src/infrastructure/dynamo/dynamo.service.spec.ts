@@ -45,4 +45,50 @@ describe("DynamoService — un solo flujo activo por docente", () => {
     expect(cmd).toBeInstanceOf(DeleteItemCommand);
     expect(cmd.input.ConditionExpression).toContain("active_session = :sid");
   });
+
+  describe("getActiveSession (solo lectura)", () => {
+    const ahora = () => Math.floor(Date.now() / 1000);
+    const cupo = (sesion: string, hasta: number) => ({ Item: { active_session: { S: sesion }, active_until: { N: String(hasta) } } });
+
+    it("devuelve la sesión activa del docente leyendo su cupo y la sesión", async () => {
+      send.mockResolvedValueOnce(cupo("s1", ahora() + 300));
+      send.mockResolvedValueOnce({ Item: { phase: { S: "awaiting_hitl" }, workflow_status: { S: "" } } });
+      await expect(service.getActiveSession("u1")).resolves.toEqual({ sessionId: "s1", phase: "awaiting_hitl", workflowStatus: null });
+      const [primera, segunda] = send.mock.calls.map((c) => c[0] as GetItemCommand);
+      expect(primera).toBeInstanceOf(GetItemCommand);
+      expect(primera.input.Key).toEqual({ session_id: { S: "user#u1" } });
+      expect(segunda.input.Key).toEqual({ session_id: { S: "s1" } });
+    });
+
+    it("es solo lectura: no escribe ni borra nada", async () => {
+      send.mockResolvedValueOnce(cupo("s1", ahora() - 5));
+      await service.getActiveSession("u1");
+      for (const [cmd] of send.mock.calls) {
+        expect(cmd).toBeInstanceOf(GetItemCommand);
+      }
+    });
+
+    it("null si el docente no tiene cupo", async () => {
+      send.mockResolvedValueOnce({});
+      await expect(service.getActiveSession("u1")).resolves.toBeNull();
+    });
+
+    it("null si el cupo ya venció", async () => {
+      send.mockResolvedValueOnce(cupo("s1", ahora() - 1));
+      await expect(service.getActiveSession("u1")).resolves.toBeNull();
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it("null si la sesión del cupo ya no existe", async () => {
+      send.mockResolvedValueOnce(cupo("s1", ahora() + 300));
+      send.mockResolvedValueOnce({});
+      await expect(service.getActiveSession("u1")).resolves.toBeNull();
+    });
+
+    it.each(["completed", "error"])("null si la sesión ya terminó (%s)", async (fase) => {
+      send.mockResolvedValueOnce(cupo("s1", ahora() + 300));
+      send.mockResolvedValueOnce({ Item: { phase: { S: fase } } });
+      await expect(service.getActiveSession("u1")).resolves.toBeNull();
+    });
+  });
 });

@@ -124,6 +124,18 @@ export class JobsController {
     return this.jobsService.getHistoryByUser(user.id);
   }
 
+  // Debe ir ANTES de `:id`: si no, "active" se leería como un id de job.
+  @UseGuards(CognitoAuthGuard)
+  @Get("active")
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Flujo activo del docente (para retomarlo), leído de su cupo" })
+  @ApiResponse({ status: 200, description: "`{ active: {sessionId, phase, workflowStatus} | null }`." })
+  async getActive(@Req() request: RequestWithUser) {
+    const user = request.user;
+    if (!user?.id) throw new BadRequestException("Authenticated user is required.");
+    return this.jobsService.getActiveSession(user.id);
+  }
+
   @UseGuards(CognitoAuthGuard)
   @Get(":id")
   @ApiBearerAuth()

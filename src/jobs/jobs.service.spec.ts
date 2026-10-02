@@ -31,6 +31,7 @@ describe("JobsService", () => {
     createJobSession: jest.fn(),
     acquireUserSlot: jest.fn(),
     releaseUserSlot: jest.fn(),
+    getActiveSession: jest.fn(),
   };
 
   let service: JobsService;
@@ -141,5 +142,18 @@ describe("JobsService", () => {
     s3ServiceMock.uploadObject.mockRejectedValueOnce(new Error("s3 caido"));
     await expect(service.createUploadJob("user-456", dto, archivos)).rejects.toThrow("s3 caido");
     expect(dynamoServiceMock.releaseUserSlot).toHaveBeenCalledWith("user-456", "job-123");
+  });
+
+  it("getActiveSession envuelve la sesión activa del docente", async () => {
+    dynamoServiceMock.getActiveSession.mockResolvedValue({ sessionId: "s1", phase: "running", workflowStatus: null });
+    await expect(service.getActiveSession("user-456")).resolves.toEqual({
+      active: { sessionId: "s1", phase: "running", workflowStatus: null },
+    });
+    expect(dynamoServiceMock.getActiveSession).toHaveBeenCalledWith("user-456");
+  });
+
+  it("getActiveSession devuelve active null si no hay flujo activo", async () => {
+    dynamoServiceMock.getActiveSession.mockResolvedValue(null);
+    await expect(service.getActiveSession("user-456")).resolves.toEqual({ active: null });
   });
 });

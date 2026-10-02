@@ -182,6 +182,12 @@ export class JobsService {
     return this.dynamoService.listSessionsByUser(userId);
   }
 
+  async getActiveSession(userId: string): Promise<{
+    active: { sessionId: string; phase: string; workflowStatus: string | null } | null;
+  }> {
+    return { active: await this.dynamoService.getActiveSession(userId) };
+  }
+
   async findJobStatus(userId: string, jobId: string): Promise<Job> {
     const job = await this.findOwnedJob(userId, jobId);
     return job;
