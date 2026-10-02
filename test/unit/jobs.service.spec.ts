@@ -26,6 +26,8 @@ describe("JobsService", () => {
   };
 
   const dynamoServiceMock = {
+    acquireUserSlot: jest.fn(),
+    releaseUserSlot: jest.fn(),
     createJobSession: jest.fn(),
     listSessionsByUser: jest.fn(),
   };
@@ -48,6 +50,8 @@ describe("JobsService", () => {
     s3ServiceMock.createSignedDownloadUrl.mockResolvedValue("https://signed");
     dynamoServiceMock.createJobSession.mockResolvedValue(undefined);
     dynamoServiceMock.listSessionsByUser.mockResolvedValue([]);
+    dynamoServiceMock.acquireUserSlot.mockResolvedValue({ acquired: true });
+    dynamoServiceMock.releaseUserSlot.mockResolvedValue(undefined);
 
     service = new JobsService(
       prismaServiceMock as unknown as PrismaService,

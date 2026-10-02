@@ -26,6 +26,8 @@ describe("JobsService additional cases", () => {
 
   const dynamoServiceMock = {
     createJobSession: jest.fn(),
+    acquireUserSlot: jest.fn(),
+    releaseUserSlot: jest.fn(),
     listSessionsByUser: jest.fn(),
   };
 
@@ -44,6 +46,8 @@ describe("JobsService additional cases", () => {
 
     s3ServiceMock.uploadObject.mockResolvedValue({ bucket: "b", key: "k" });
     dynamoServiceMock.createJobSession.mockResolvedValue(undefined);
+    dynamoServiceMock.acquireUserSlot.mockResolvedValue({ acquired: true });
+    dynamoServiceMock.releaseUserSlot.mockResolvedValue(undefined);
     dynamoServiceMock.listSessionsByUser.mockResolvedValue([{ sessionId: "s1" }]);
 
     service = new JobsService(

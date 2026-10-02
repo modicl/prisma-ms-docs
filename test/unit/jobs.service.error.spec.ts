@@ -20,6 +20,8 @@ describe("JobsService error handling", () => {
 
   const dynamoServiceMock = {
     createJobSession: jest.fn(),
+    acquireUserSlot: jest.fn(),
+    releaseUserSlot: jest.fn(),
   };
 
   const configServiceMock = {
@@ -35,6 +37,8 @@ describe("JobsService error handling", () => {
     prismaServiceMock.job.update.mockResolvedValue({});
 
     dynamoServiceMock.createJobSession.mockResolvedValue(undefined);
+    dynamoServiceMock.acquireUserSlot.mockResolvedValue({ acquired: true });
+    dynamoServiceMock.releaseUserSlot.mockResolvedValue(undefined);
 
     service = new JobsService(
       prismaServiceMock as unknown as PrismaService,

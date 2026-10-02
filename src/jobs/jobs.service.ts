@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -72,6 +73,18 @@ export class JobsService {
       },
     });
 
+    // Un solo flujo activo por docente: el cupo se reserva con el id del job (que es el id de la sesión).
+    const cupo = await this.dynamoService.acquireUserSlot(userId, job.id);
+    if (!cupo.acquired) {
+      await this.prismaService.job.delete({ where: { id: job.id } });
+      throw new ConflictException({
+        statusCode: 409,
+        code: "flow_in_progress",
+        message: "Ya tienes un flujo en acción",
+        session_id: cupo.activeSessionId ?? null,
+      });
+    }
+
     const paciS3Key = this.prefixedKey(job.id, paciPayload.objectKey);
     const materialS3Key = this.prefixedKey(job.id, planningPayload.objectKey);
 
@@ -104,6 +117,8 @@ export class JobsService {
         `createUploadJob failed for job ${job.id}`,
         error instanceof Error ? error.stack : String(error),
       );
+
+      await this.dynamoService.releaseUserSlot(userId, job.id);
 
       await this.prismaService.job.update({
         where: { id: job.id },

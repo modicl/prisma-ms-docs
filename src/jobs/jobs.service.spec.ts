@@ -1,3 +1,4 @@
+import { ConflictException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JobStatus } from "@prisma/client";
 import { JobsService } from "./jobs.service";
@@ -14,6 +15,7 @@ describe("JobsService", () => {
     job: {
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       count: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -27,6 +29,8 @@ describe("JobsService", () => {
 
   const dynamoServiceMock = {
     createJobSession: jest.fn(),
+    acquireUserSlot: jest.fn(),
+    releaseUserSlot: jest.fn(),
   };
 
   let service: JobsService;
@@ -53,6 +57,9 @@ describe("JobsService", () => {
       key: "key",
     });
     dynamoServiceMock.createJobSession.mockResolvedValue(undefined);
+    dynamoServiceMock.acquireUserSlot.mockResolvedValue({ acquired: true });
+    dynamoServiceMock.releaseUserSlot.mockResolvedValue(undefined);
+    prismaServiceMock.job.delete.mockResolvedValue({});
 
     service = new JobsService(
       prismaServiceMock as unknown as PrismaService,
@@ -97,5 +104,42 @@ describe("JobsService", () => {
       "jobs/job-123/material.docx",
       "revisar esto",
     );
+  });
+
+  const archivos = {
+    planningFile: [
+      {
+        originalname: "plan.docx",
+        mimetype: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: Buffer.from("planning"),
+      },
+    ],
+  };
+  const dto = { prompt: "x", paciJson: JSON.stringify({ a: 1 }) } as never;
+
+  it("reserva el cupo del docente con el id del job", async () => {
+    await service.createUploadJob("user-456", dto, archivos);
+    expect(dynamoServiceMock.acquireUserSlot).toHaveBeenCalledWith("user-456", "job-123");
+  });
+
+  it("si ya tiene un flujo activo responde 409, borra el job y no escribe nada", async () => {
+    dynamoServiceMock.acquireUserSlot.mockResolvedValue({ acquired: false, activeSessionId: "activa-1" });
+    const error = await service.createUploadJob("user-456", dto, archivos).catch((e) => e);
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getResponse()).toEqual({
+      statusCode: 409,
+      code: "flow_in_progress",
+      message: "Ya tienes un flujo en acción",
+      session_id: "activa-1",
+    });
+    expect(prismaServiceMock.job.delete).toHaveBeenCalledWith({ where: { id: "job-123" } });
+    expect(dynamoServiceMock.createJobSession).not.toHaveBeenCalled();
+    expect(s3ServiceMock.uploadObject).not.toHaveBeenCalled();
+  });
+
+  it("si falla la subida a S3 libera el cupo", async () => {
+    s3ServiceMock.uploadObject.mockRejectedValueOnce(new Error("s3 caido"));
+    await expect(service.createUploadJob("user-456", dto, archivos)).rejects.toThrow("s3 caido");
+    expect(dynamoServiceMock.releaseUserSlot).toHaveBeenCalledWith("user-456", "job-123");
   });
 });

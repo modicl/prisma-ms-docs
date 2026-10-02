@@ -1,6 +1,13 @@
 import { Injectable, InternalServerErrorException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ConditionalCheckFailedException, DynamoDBClient, PutItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
+import {
+  ConditionalCheckFailedException,
+  DeleteItemCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+  ScanCommand,
+} from "@aws-sdk/client-dynamodb";
 
 export interface SessionSummary {
   sessionId: string;
@@ -78,6 +85,72 @@ export class DynamoService {
         error instanceof Error ? error.message : "Error writing session to DynamoDB.",
       );
     }
+  }
+
+  // ── Un solo flujo activo por docente ────────────────────────────────────────────────────────────────────
+  // Mismo registro que usa el workflow (`user#{id}` en la misma tabla): reserva atómica con escritura condicional.
+  // Vence solo (active_until) para que un flujo atascado no bloquee al docente; el TTL de DynamoDB limpia el registro después.
+  async acquireUserSlot(
+    userId: string,
+    sessionId: string,
+    ttlSeconds = 600,
+  ): Promise<{ acquired: boolean; activeSessionId?: string }> {
+    const table = this.table();
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      await this.getClient().send(
+        new PutItemCommand({
+          TableName: table,
+          Item: {
+            session_id:     { S: `user#${userId}` },
+            active_session: { S: sessionId },
+            active_until:   { N: String(now + ttlSeconds) },
+            expires_at:     { N: String(now + ttlSeconds + 3600) },
+          },
+          ConditionExpression: "attribute_not_exists(session_id) OR active_until < :now",
+          ExpressionAttributeValues: { ":now": { N: String(now) } },
+        }),
+      );
+      return { acquired: true };
+    } catch (error) {
+      if (!(error instanceof ConditionalCheckFailedException)) {
+        throw new InternalServerErrorException(
+          error instanceof Error ? error.message : "Error reservando el cupo de flujo.",
+        );
+      }
+    }
+    const actual = await this.getClient().send(
+      new GetItemCommand({ TableName: table, Key: { session_id: { S: `user#${userId}` } } }),
+    );
+    return { acquired: false, activeSessionId: actual.Item?.active_session?.S };
+  }
+
+  /** Libera el cupo solo si sigue siendo de esa sesión (no borra el de un flujo posterior). Nunca lanza. */
+  async releaseUserSlot(userId: string, sessionId: string): Promise<void> {
+    try {
+      await this.getClient().send(
+        new DeleteItemCommand({
+          TableName: this.table(),
+          Key: { session_id: { S: `user#${userId}` } },
+          ConditionExpression: "active_session = :sid",
+          ExpressionAttributeValues: { ":sid": { S: sessionId } },
+        }),
+      );
+    } catch (error) {
+      if (!(error instanceof ConditionalCheckFailedException)) {
+        this.logger.error(`No se pudo liberar el cupo de ${userId}`, error instanceof Error ? error.stack : String(error));
+      }
+    }
+  }
+
+  private table(): string {
+    const table =
+      this.configService.get<string>("DYNAMO_TABLE") ??
+      this.configService.get<string>("CHAT_SESSIONS_TABLE");
+    if (!table) {
+      throw new InternalServerErrorException("DYNAMO_TABLE is required for job sessions.");
+    }
+    return table;
   }
 
   async listSessionsByUser(userId: string): Promise<SessionSummary[]> {

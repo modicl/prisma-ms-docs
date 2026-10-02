@@ -25,6 +25,8 @@ describe("JobsService edge cases", () => {
 
   const dynamoServiceMock = {
     createJobSession: jest.fn(),
+    acquireUserSlot: jest.fn(),
+    releaseUserSlot: jest.fn(),
   };
 
   const configServiceMock = {
@@ -50,6 +52,8 @@ describe("JobsService edge cases", () => {
     s3ServiceMock.uploadObject.mockResolvedValue({ bucket: "b", key: "k" });
     s3ServiceMock.createSignedDownloadUrl.mockResolvedValue("https://signed");
     dynamoServiceMock.createJobSession.mockResolvedValue(undefined);
+    dynamoServiceMock.acquireUserSlot.mockResolvedValue({ acquired: true });
+    dynamoServiceMock.releaseUserSlot.mockResolvedValue(undefined);
 
     service = new JobsService(
       prismaServiceMock as unknown as PrismaService,
