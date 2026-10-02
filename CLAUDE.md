@@ -18,6 +18,11 @@ gestiona la subida, el estado (`schema jobs` en Postgres) y la descarga vía URL
 Expone dos caminos que **no se cruzan entre sí** dentro de este código:
 
 - **`/api/jobs/*`** — flujo asíncrono con persistencia en Postgres (tabla `jobs`) + sesión en DynamoDB.
+> ⚠️ **Actualizado el 2026-10-02:** el módulo `chat` (`POST /api/chat/start`) fue **eliminado**: el BFF no lo ruteaba y el front no lo
+> llamaba (verificado), así que era código muerto. Todo lo que este archivo dice más abajo sobre `chat/`, `ChatService` y `/api/chat/start`
+> es histórico. La subida real es **`POST /api/jobs/upload`**, que además reserva el cupo de un solo flujo activo por docente
+> (`DynamoService.acquireUserSlot`/`releaseUserSlot`, responde 409 `flow_in_progress`).
+
 - **`/api/chat/*`** — solo `POST /api/chat/start`, crea una sesión de chat en DynamoDB y sube los
   archivos a S3, pero **no persiste nada en Postgres**. Es probablemente el punto de entrada real usado
   por el flujo HITL descrito en el CLAUDE.md raíz (aunque ese flujo, según el mapa general, va directo

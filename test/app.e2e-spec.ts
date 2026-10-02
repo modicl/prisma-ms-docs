@@ -2,8 +2,6 @@ import { CanActivate, ExecutionContext, INestApplication, ValidationPipe } from 
 import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { AppController } from "../src/app.controller";
-import { ChatController } from "../src/chat/chat.controller";
-import { ChatService } from "../src/chat/chat.service";
 import { JobsController } from "../src/jobs/jobs.controller";
 import { JobsService } from "../src/jobs/jobs.service";
 import { CognitoAuthGuard } from "../src/auth/guards/cognito-auth.guard";
@@ -25,9 +23,6 @@ class TestCognitoAuthGuard implements CanActivate {
 describe("App e2e", () => {
   let app: INestApplication;
 
-  const chatServiceMock = {
-    startChat: jest.fn(),
-  };
 
   const jobsServiceMock = {
     createUploadJob: jest.fn(),
@@ -38,9 +33,8 @@ describe("App e2e", () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [AppController, ChatController, JobsController],
+      controllers: [AppController, JobsController],
       providers: [
-        { provide: ChatService, useValue: chatServiceMock },
         { provide: JobsService, useValue: jobsServiceMock },
       ],
     })
@@ -69,55 +63,17 @@ describe("App e2e", () => {
   });
 
   beforeEach(() => {
-    chatServiceMock.startChat.mockReset();
     jobsServiceMock.createUploadJob.mockReset();
     jobsServiceMock.findJobsByUser.mockReset();
     jobsServiceMock.findJobStatus.mockReset();
     jobsServiceMock.getDownloadUrl.mockReset();
   });
 
-  it("serves health and the chat start endpoint", async () => {
-    chatServiceMock.startChat.mockResolvedValue({
-      session_id: "session-123",
-    });
-
+  it("serves health", async () => {
     await request(app.getHttpServer())
       .get("/api/health")
       .expect(200)
       .expect({ status: "ok" });
-
-    const response = await request(app.getHttpServer())
-      .post("/api/chat/start")
-      .field("prompt", "resume esto")
-      .field("school_id", "colegio_1")
-      .attach("paci_file", Buffer.from("dummy pdf"), "paci.pdf")
-      .attach("material_file", Buffer.from("dummy docx"), "material.docx")
-      .expect(201);
-
-    expect(response.body).toEqual({ session_id: "session-123" });
-    expect(chatServiceMock.startChat).toHaveBeenCalledWith({
-      userId: "teacher-1",
-      paciFile: expect.objectContaining({
-        originalname: "paci.pdf",
-        mimetype: "application/pdf",
-      }),
-      materialFile: expect.objectContaining({
-        originalname: "material.docx",
-        mimetype:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      }),
-      prompt: "resume esto",
-      schoolId: "colegio_1",
-    });
-  });
-
-  it("rejects chat start requests without required files", async () => {
-    await request(app.getHttpServer())
-      .post("/api/chat/start")
-      .field("prompt", "sin archivos")
-      .expect(400);
-
-    expect(chatServiceMock.startChat).not.toHaveBeenCalled();
   });
 
   it("creates a job through the upload endpoint", async () => {
