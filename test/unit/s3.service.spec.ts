@@ -95,4 +95,46 @@ describe("S3Service", () => {
       InternalServerErrorException,
     );
   });
+
+  describe("URL prefirmada con dirección pública (solo desarrollo local)", () => {
+    const config = (extra: Record<string, string> = {}) => {
+      const valores: Record<string, string> = {
+        AWS_REGION: "us-east-1",
+        AWS_ACCESS_KEY_ID: "test",
+        AWS_SECRET_ACCESS_KEY: "test",
+        AWS_S3_ENDPOINT: "http://localstack:4566",
+        AWS_S3_FORCE_PATH_STYLE: "true",
+        S3_BUCKET: "bucket-1",
+        ...extra,
+      };
+      configServiceMock.get.mockImplementation((k: string) => valores[k]);
+    };
+    const hostDelClienteQueFirmo = async () => {
+      const cliente = getSignedUrlMock.mock.calls[0][0];
+      return (await cliente.config.endpoint()).hostname;
+    };
+
+    it("firma con la dirección pública si está definida (el navegador no resuelve `localstack`)", async () => {
+      config({ AWS_S3_PUBLIC_ENDPOINT: "http://localhost:4566" });
+      getSignedUrlMock.mockResolvedValue("http://localhost:4566/bucket-1/k?firma");
+      await service.createSignedDownloadUrl("results/s1/rubrica.docx");
+      expect(await hostDelClienteQueFirmo()).toBe("localhost");
+    });
+
+    it("sin dirección pública firma con el endpoint de siempre (producción no cambia)", async () => {
+      config();
+      getSignedUrlMock.mockResolvedValue("https://s3/bucket-1/k?firma");
+      await service.createSignedDownloadUrl("results/s1/rubrica.docx");
+      expect(await hostDelClienteQueFirmo()).toBe("localstack");
+    });
+
+    it("subir sigue usando el endpoint interno aunque haya dirección pública", async () => {
+      config({ AWS_S3_PUBLIC_ENDPOINT: "http://localhost:4566" });
+      const enviar = jest.fn().mockResolvedValue(undefined);
+      const clienteInterno = (service as any).getClientAndBucket().client;
+      jest.spyOn(clienteInterno, "send").mockImplementation(enviar);
+      await service.uploadObject({ key: "jobs/x", body: "p", contentType: "text/plain" });
+      expect((await clienteInterno.config.endpoint()).hostname).toBe("localstack");
+    });
+  });
 });
