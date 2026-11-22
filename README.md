@@ -1,38 +1,44 @@
 # prisma-ms-docs
 
-Microservicio de documentos y jobs PACI para PRISMA.
+Microservicio de documentos y jobs PACI de P.R.I.S.M.A. Recibe los archivos del docente, los sube a S3, registra el job en PostgreSQL y crea la sesión en DynamoDB. Con eso se dispara el procesamiento de IA, que ocurre en otro servicio.
 
-## Responsabilidad
+## Qué hace
 
-Este servicio centraliza el flujo event-driven de documentos:
+- `POST /api/jobs/upload`: valida el archivo, crea el job (`pending`), crea la sesión en DynamoDB y sube el archivo a S3 bajo `jobs/{id}/`. Reserva el cupo de un solo flujo activo por docente y responde 409 `flow_in_progress` si ya existe uno.
+- Listado, historial, estado, estadísticas y descarga de jobs (URL firmada de S3).
+- No contiene lógica de IA: el evento de S3 llega a SQS, una Lambda arranca Step Functions y esa orquestación llama a `prisma_workflow`.
 
-- Recibe archivos PACI en PDF o DOCX, o el JSON normalizado que proviene del formulario web.
-- Recibe la planificación en PDF o DOCX.
-- Sube los artefactos a S3 para disparar el trigger `PUT` que activa el Lambda.
-- Guarda el historial de jobs por docente autenticado.
+El orden es obligatorio: primero la sesión en DynamoDB y después el archivo en S3, porque el evento de S3 dispara el flujo y espera encontrar la sesión.
 
-## Endpoints
+## Autenticación
 
-- `POST /api/chat/start`.
-- `POST /api/jobs/upload`.
-- `GET /api/jobs`.
-- `GET /api/jobs/:id`.
-- `GET /api/jobs/:id/download`.
-- `GET /api/health`.
+Valida el ID token de Amazon Cognito con JWKS (`jose`) y aplica roles por lista blanca sobre `cognito:groups` con `RolesGuard`. El colegio se lee de `custom:colegioId`.
 
-## Variables de entorno
+## Stack
 
-Ver [.env.example](/Users/javier/Documents/prisma-ms-docs/.env.example) para la lista completa.
+NestJS 10, Prisma 5 (`multiSchema`, esquema `jobs`), AWS SDK v3 (S3, DynamoDB). Puerto 3000.
 
-## Arranque local
+## Configuración
 
-1. Instala dependencias.
-2. Configura `.env` con tus credenciales.
-3. Ejecuta `npm run prisma:migrate:dev`.
-4. Ejecuta `npm run start:dev`.
+| Variable | Descripción |
+|---|---|
+| `DATABASE_URL` | PostgreSQL. |
+| `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID` | Validación de tokens. |
+| `S3_BUCKET`, `AWS_REGION` | Bucket de jobs (en AWS se usa el rol de la tarea, sin claves). |
+| `DYNAMO_TABLE` | Tabla de sesiones. |
+| `JOB_UPLOAD_MAX_SIZE_MB`, `PACI_DOCUMENTS_URL_EXPIRES_IN` | Límite de subida y vigencia de las URL firmadas. |
+| `INTERNAL_TOKEN` | Secreto compartido con el workflow. |
 
-## Notas de integración
+## Ejecución y pruebas
 
-- La autenticación se valida con Supabase usando `Authorization: Bearer <token>`.
-- Los jobs se asocian al `user_id` extraído del JWT.
-- Las URLs de descarga firmadas expiran en 15 minutos por defecto.
+```bash
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+npm test
+```
+
+## Despliegue
+
+Imagen en ECR (`api/msdocs`), contenedor de la tarea ECS `prisma-app`.
